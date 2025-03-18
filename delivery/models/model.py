@@ -1,11 +1,9 @@
-import math
-from utils import utils
-
 class Location:
     def __init__(self, x: int, y: int): 
         self.x = x # Position in X-axis
         self.y = y # Position in Y-axis
-
+    def euclidean_distance(self, other: "Location") -> float:
+        return ((self.x - other.x) ** 2 + (self.y - other.y) ** 0.5)
 class Grid: 
     def __init__(self, rows: int, cols: int): 
         self.rows = rows # Number of            rows in the grid 
@@ -42,7 +40,7 @@ class Drone:
         self.busy = False
 
     def move_to(self, location: Location) -> int:
-        distance = utils.euclidean_distance(self.location, location)
+        distance = self.location.euclidean_distance(location)
         self.location = location
         return distance
     
@@ -69,17 +67,71 @@ class Drone:
         return False
     
 class Simulation:
-    def __init__(self, grid: Grid, products: list ,drones: list, warehouses: list, orders: list):
-        self.grid = grid
-        self.drones = drones
-        self.products = products
-        self.warehouses = warehouses
-        self.orders = orders
+    def __init__(self, simulation_data: dict):
+        self.grid = Grid(simulation_data["simulation"]["rows"], simulation_data["simulation"]["cols"])
+
+        self.drones = []
+        for drone_id in range(simulation_data["simulation"]["drones"]):
+            drones_initial_location = Location(*simulation_data["warehouses"][0]["location"])
+            self.drones.append(Drone(drone_id, drones_initial_location, simulation_data["simulation"]["max_load"]))
+
+        self.products = []
+        for product_id, weight in enumerate(simulation_data["product_weights"]):
+            self.products.append(Product(product_id, weight))
+        
+        self.warehouses = []
+        for warehouse_id, warehouse_data in enumerate(simulation_data["warehouses"]):
+            self.warehouses.append(Warehouse(warehouse_id, Location(*warehouse_data["location"]), {product_id: quantity for product_id, quantity in enumerate(warehouse_data["stock"])}))
+
+        self.orders = []
+        for order_id, order_data in enumerate(simulation_data["orders"]):
+            product_counts = {}
+            for product_type in order_data["product_types"]:
+                if product_type in product_counts:
+                    product_counts[product_type] += 1
+                else:
+                    product_counts[product_type] = 1
+            self.orders.append(Order(order_id, Location(*order_data["destination"]), product_counts))
+
         self.time = 0
+        self.deadline = simulation_data["simulation"]["deadline"]
 
     def run(self):
         """
         Run the simulation
         """
         pass # Implement algorithms and call them here
+
+    def testing_parse(self):
+        # Printing simulation grid
+        print(f"Grid: {self.grid.rows} rows x {self.grid.cols} columns")
+
+        # Printing deadline = Max Turns
+        print(f"\nDeadline: {self.deadline} turns")
+        
+        # Printing drones
+        print(f"\nDrones (Total: {len(self.drones)}):")
+        for drone in self.drones:
+            print(f"  Drone ID: {drone.drone_id}, Initial Location: {drone.location.x}, {drone.location.y}, Max Load: {drone.max_payload}")
+        
+        # Printing products
+        print(f"\nProducts (Total: {len(self.products)}):")
+        for product in self.products:
+            print(f"  Product ID: {product.product_id}, Weight: {product.weight} units")
+        
+        # Printing warehouses
+        print(f"\nWarehouses (Total: {len(self.warehouses)}):")
+        for warehouse in self.warehouses:
+            print(f"  Warehouse ID: {warehouse.warehouse_id}, Location: ({warehouse.location.x}, {warehouse.location.y})")
+            print("    Stock:")
+            for product_id, quantity in warehouse.stock.items():
+                print(f"      Product {product_id}: {quantity} items")
+        
+        # Printing orders
+        print(f"\nOrders (Total: {len(self.orders)}):")
+        for order in self.orders:
+            print(f"  Order ID: {order.order_id}, Destination: ({order.location.x}, {order.location.y})")
+            print(f"    Products Ordered:")
+            for product_id, quantity in order.items.items():
+                print(f"      Product {product_id}: {quantity} items")
         
