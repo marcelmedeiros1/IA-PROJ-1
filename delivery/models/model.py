@@ -1,9 +1,12 @@
+import math
+
 class Location:
     def __init__(self, x: int, y: int): 
         self.x = x # Position in X-axis
         self.y = y # Position in Y-axis
-    def euclidean_distance(self, other: "Location") -> float:
-        return ((self.x - other.x) ** 2 + (self.y - other.y) ** 0.5)
+    def euclidean_distance(self, other: "Location") -> int:
+        distance = math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
+        return math.ceil(distance)
 class Grid: 
     def __init__(self, rows: int, cols: int): 
         self.rows = rows # Number of            rows in the grid 
@@ -96,12 +99,6 @@ class Simulation:
         self.time = 0
         self.deadline = simulation_data["simulation"]["deadline"]
 
-    def run(self):
-        """
-        Run the simulation
-        """
-        pass # Implement algorithms and call them here
-
     def testing_parse(self):
         # Printing simulation grid
         print(f"Grid: {self.grid.rows} rows x {self.grid.cols} columns")
@@ -134,4 +131,26 @@ class Simulation:
             print(f"    Products Ordered:")
             for product_id, quantity in order.items.items():
                 print(f"      Product {product_id}: {quantity} items")
-        
+    
+    def list_orders(self):
+        orders_set = []
+        for orders in self.orders:
+            orders_set.append(orders.order_id)
+        return orders_set
+    def list_warehouses(self):
+        warehouses_set = []
+        for warehouse in self.warehouses:
+            warehouses_set.append(warehouse.warehouse_id)
+        return warehouses_set
+    
+    def list_drones(self):
+        drones_set = []
+        for drone in self.drones:
+            drones_set.append(drone.drone_id)
+        return drones_set
+
+    def run(self):
+        """
+        Run the simulation
+        """
+        pass # Implement algorithms and call them here
