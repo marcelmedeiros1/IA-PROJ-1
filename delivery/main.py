@@ -17,4 +17,10 @@ from algorithms.algorithm import *
 
 simulation_data = parse_file("busy_day.in")
 simulation = Simulation(simulation_data)
-simulation.testing_parse()
+# simulation.testing_parse()
+
+# Testing Algorithm
+aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
+solution = aco.run()
+
+print(solution)

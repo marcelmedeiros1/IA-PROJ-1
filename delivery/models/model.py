@@ -1,9 +1,11 @@
+import math
+
 class Location:
     def __init__(self, x: int, y: int): 
         self.x = x # Position in X-axis
         self.y = y # Position in Y-axis
     def euclidean_distance(self, other: "Location") -> float:
-        return ((self.x - other.x) ** 2 + (self.y - other.y) ** 0.5)
+        return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
 class Grid: 
     def __init__(self, rows: int, cols: int): 
         self.rows = rows # Number of            rows in the grid 
