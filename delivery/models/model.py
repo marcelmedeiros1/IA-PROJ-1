@@ -7,6 +7,12 @@ class Location:
     def euclidean_distance(self, other: "Location") -> int:
         distance = math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
         return math.ceil(distance)
+    def __eq__(self, other):
+        if isinstance(other, Location):
+            return self.x == other.x and self.y == other.y
+        return NotImplemented
+    def __ne__(self, other):
+        return not self == other
 class Grid: 
     def __init__(self, rows: int, cols: int): 
         self.rows = rows # Number of            rows in the grid 
@@ -40,7 +46,9 @@ class Drone:
         self.max_payload = max_payload
         self.payload = 0
         self.inventory = {} # Dictionary {product_id: quantity}
-        self.busy = False
+        self.busy_until = 0
+        self.current_task = None
+        self.queue = []
 
     def move_to(self, location: Location) -> int:
         distance = self.location.euclidean_distance(location)
@@ -55,6 +63,8 @@ class Drone:
                 self.payload += product.weight * quantity
                 warehouse.stock[product.product_id] -= quantity
                 return True
+            else:
+                print("Drone overloaded")
         return False
     
     def deliver(self, order: Order, product: Product, quantity: int) -> bool:
