@@ -18,15 +18,17 @@ import copy
 # python3 main.py > parsing_test.txt (command to execute)
 
 
+# Testing Brute-Force
 simulation_data = parse_file("tiny.in")
 simulation_o = Simulation(simulation_data)
-sequences= generate__all_orders_sequences(simulation_o.orders)
-
-
 simulation = copy.deepcopy(simulation_o)
 total_score = simulate_turns(simulation.drones, simulation.warehouses, simulation.orders, simulation.products, simulation.deadline)
 print(total_score)
 
-# for seq in sequences:
-#     total_score = simulate(seq, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, simulation.deadline)
-#     print(total_score)
+
+simulation_data = parse_file("busy_day.in")
+simulation = Simulation(simulation_data)
+# Testing Algorithm
+aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
+solution = aco.run()
+aco.print_solution()
