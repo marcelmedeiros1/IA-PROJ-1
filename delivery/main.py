@@ -26,9 +26,9 @@ total_score = simulate_turns(simulation.drones, simulation.warehouses, simulatio
 print(total_score)
 
 
-simulation_data = parse_file("busy_day.in")
-simulation = Simulation(simulation_data)
-# Testing Algorithm
-aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
-solution = aco.run()
-aco.print_solution()
+# simulation_data = parse_file("busy_day.in")
+# simulation = Simulation(simulation_data)
+# # Testing Algorithm
+# aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
+# solution = aco.run()
+# aco.print_solution()

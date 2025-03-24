@@ -26,63 +26,6 @@ def get_best_drone(drones, target_location):
 
     return best_drone
 
-def simulate(sequence, drones, warehouses, products, max_turns):
-    sequence = copy.deepcopy(sequence)
-    current_time = 0
-    total_score = 0
-
-    for order in sequence:
-        for product_id in list(order.items.keys()):
-            product = products[product_id]
-            quantity_needed = order.items[product_id]
-            quantity_collected = 0
-
-            for warehouse in warehouses:
-                if product_id in warehouse.stock and warehouse.stock[product_id] > 0:
-                    available_quantity = warehouse.stock[product_id]
-                    quantity_to_collect = min(quantity_needed - quantity_collected, available_quantity)
-                    
-                    best_drone = get_best_drone(drones, warehouse.location)
-                    # Mover o drone para o armazém, se necessário
-                    if best_drone.location != warehouse.location:
-                        distance_to_warehouse = best_drone.move_to(warehouse.location)
-                        current_time += distance_to_warehouse
-                        print(f"Drone {best_drone.drone_id}  moved to warehouse {warehouse.warehouse_id} in {distance_to_warehouse} turns")
-                        if current_time > max_turns:
-                            print("Time exceeded")
-                            return total_score
-
-                    # Carregar o produto no drone
-                    best_drone.load(warehouse, product, quantity_to_collect)
-                    print(f"Drone {best_drone.drone_id} loaded {quantity_to_collect} units of product {product_id} from warehouse {warehouse.warehouse_id}")
-                    current_time += 1
-                    quantity_collected += quantity_to_collect
-                    
-                    # Verificar se já coletou a quantidade necessária
-                    if quantity_collected >= quantity_needed:
-                        break
-
-        # Após coletar todos os produtos do pedido, entregar ao cliente
-        distance_to_customer = best_drone.move_to(order.location)
-        current_time += distance_to_customer
-        if current_time > max_turns:
-            return total_score
-
-        for product_id in list(order.items.keys()):
-            product = products[product_id]
-            quantity = order.items[product_id]
-            best_drone.deliver(order, product, quantity)
-            print(f"Drone {best_drone.drone_id} delivered {quantity} units of product {product_id} to customer (order {order.location.x}, {order.location.y})")
-            current_time += 1
-
-        # Calcular a pontuação com base no turno de conclusão
-        order_score = (1 - (current_time / max_turns)) * 100
-        total_score += order_score
-
-    return total_score
-
-from collections import defaultdict
-
 def simulate_turns(drones, warehouses, orders, products, max_turns):
     current_turn = 0
     total_score = 0
@@ -115,23 +58,25 @@ def simulate_turns(drones, warehouses, orders, products, max_turns):
 
                     if action[0] == 'load':
                         _, warehouse, product, quantity, order = action
-                        dist = drone.location.euclidean_distance(warehouse.location)
-                        start = current_turn
-                        end = current_turn + dist
-                        drone.move_to(warehouse.location)
-                        drone_logs[drone.drone_id].append(f"● flies to warehouse {warehouse.warehouse_id} in turns {start} to {end}")
-                        drone.busy_until = end + 1
+                        if drone.location != warehouse.location:
+                            dist = drone.location.euclidean_distance(warehouse.location)
+                            start = current_turn
+                            end = current_turn + dist
+                            drone.move_to(warehouse.location)
+                            drone_logs[drone.drone_id].append(f"● flies to warehouse {warehouse.warehouse_id} in turns {start} to {end}")
+                            drone.busy_until = end + 1
                         drone.load(warehouse, product, quantity)
-                        drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until - 1}")
+                        drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until}")
 
                     elif action[0] == 'deliver':
                         _, order, product, quantity = action
-                        dist = drone.location.euclidean_distance(order.location)
-                        start = current_turn
-                        end = current_turn + dist
-                        drone.move_to(order.location)
-                        drone_logs[drone.drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
-                        drone.busy_until = end + 1
+                        if drone.location != order.location:
+                            dist = drone.location.euclidean_distance(order.location)
+                            start = current_turn
+                            end = current_turn + dist
+                            drone.move_to(order.location)
+                            drone_logs[drone.drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
+                            drone.busy_until = end + 1
                         drone.deliver(order, product, quantity)
                         drone_logs[drone.drone_id].append(f"● delivers item {product.product_id} to order {order.order_id} in turn {drone.busy_until}")
 
