@@ -20,6 +20,6 @@ simulation = Simulation(simulation_data)
 #simulation.testing_parse()
 
 # Testing Algorithm
-aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
+aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, len(simulation.drones), simulation.deadline)
 solution = aco.run()
 aco.print_solution()
