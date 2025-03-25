@@ -39,6 +39,7 @@ def simulate_turns(drones, warehouses, orders, products, max_turns):
         for drone in drones:
             if drone.busy_until <= current_turn:
                 if not drone.queue:
+                    found = False
                     for order in list(pending_orders.values()):
                         for product_id, quantity in list(order.items.items()):
                             product = products[product_id]
@@ -46,12 +47,14 @@ def simulate_turns(drones, warehouses, orders, products, max_turns):
                             if warehouse:
                                 available_to_reserve = order.items[product_id] - reserved_items[order.order_id][product_id]
                                 if available_to_reserve > 0:
+                                    found = True
                                     quantity_to_reserve = min(quantity, available_to_reserve)
                                     reserved_items[order.order_id][product_id] += quantity_to_reserve
                                     drone.queue.append(('load', warehouse, product, quantity_to_reserve, order))
                                     drone.queue.append(('deliver', order, product, quantity_to_reserve))
-                                break
-                        break
+                                    break
+                        if found:
+                            break
 
                 if drone.queue:
                     action = drone.queue.pop(0)
@@ -65,8 +68,10 @@ def simulate_turns(drones, warehouses, orders, products, max_turns):
                             drone.move_to(warehouse.location)
                             drone_logs[drone.drone_id].append(f"● flies to warehouse {warehouse.warehouse_id} in turns {start} to {end}")
                             drone.busy_until = end + 1
+                        
                         drone.load(warehouse, product, quantity)
                         drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until}")
+                        drone.busy_until += 1
 
                     elif action[0] == 'deliver':
                         _, order, product, quantity = action
@@ -77,14 +82,18 @@ def simulate_turns(drones, warehouses, orders, products, max_turns):
                             drone.move_to(order.location)
                             drone_logs[drone.drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
                             drone.busy_until = end + 1
+
                         drone.deliver(order, product, quantity)
                         drone_logs[drone.drone_id].append(f"● delivers item {product.product_id} to order {order.order_id} in turn {drone.busy_until}")
+
 
                         if all(qty == 0 for qty in order.items.values()):
                             order_completion_turn[order.order_id] = drone.busy_until
                             del pending_orders[order.order_id]
                             score = ((max_turns - drone.busy_until) / max_turns) * 100
-                            drone_logs[drone.drone_id].append(f"● Order {order.order_id} is now fulfilled, scoring {score:.0f} points")
+                            drone_logs[drone.drone_id].append(f"● Order {order.order_id} has been fulfilled in turn {drone.busy_until}, scoring {score:.0f} points")
+        
+                        drone.busy_until += 1
 
         current_turn += 1
 
