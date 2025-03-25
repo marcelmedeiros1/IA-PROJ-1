@@ -7,27 +7,47 @@ import random
 import math
 import copy
 
-def generate__all_orders_sequences(orders):
-    # Generate all combinations of order
-    return list(permutations(orders))
-
 def find_warehouse_with_product(warehouses: List[Warehouse], product_id, quantity):
     for warehouse in warehouses:
         if product_id in warehouse.stock and warehouse.stock[product_id] >= quantity:
             return warehouse
     return None
 
-def get_best_drone(drones, target_location):
-    best_drone = None
-    min_distance = float('inf')
-    
-    for drone in drones:
-        distance = drone.location.euclidean_distance(target_location)
-        if distance < min_distance:
-            best_drone = drone
-            min_distance = distance
+def execute_load_action(drone, action, current_turn, drone_logs):
+    if action[0] == 'load':
+        _, warehouse, product, quantity, order = action
+        if drone.location != warehouse.location:
+            dist = drone.location.euclidean_distance(warehouse.location)
+            start = current_turn
+            end = current_turn + dist
+            drone.move_to(warehouse.location)
+            drone_logs[drone.drone_id].append(f"● flies to warehouse {warehouse.warehouse_id} in turns {start} to {end}")
+            drone.busy_until = end + 1
+        
+        drone.load(warehouse, product, quantity)
+        drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until}")
+        drone.busy_until += 1
 
-    return best_drone
+def execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns):
+    _, order, product, quantity = action
+    if drone.location != order.location:
+        dist = drone.location.euclidean_distance(order.location)
+        start = current_turn
+        end = current_turn + dist
+        drone.move_to(order.location)
+        drone_logs[drone.drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
+        drone.busy_until = end + 1
+
+    drone.deliver(order, product, quantity)
+    drone_logs[drone.drone_id].append(f"● delivers item {product.product_id} to order {order.order_id} in turn {drone.busy_until}")
+
+    if all(qty == 0 for qty in order.items.values()):
+        order_completion_turn[order.order_id] = drone.busy_until
+        del pending_orders[order.order_id]
+        score = ((max_turns - drone.busy_until) / max_turns) * 100
+        drone_logs[drone.drone_id].append(f"● Order {order.order_id} has been fulfilled in turn {drone.busy_until}, scoring {score:.0f} points")
+
+    drone.busy_until += 1
 
 def assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, products):
     if not drone.queue:
@@ -48,19 +68,29 @@ def assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, prod
             if found:
                 break
 
-def simulation_greedy(drones, warehouses, orders, products, max_turns): #Greedy Algorithm To Get Initial Solution
+def score_and_logs(order_completion_turn, max_turns, drone_logs):
+    total_score = 0
+    for order_id, turn in order_completion_turn.items():
+        score = ((max_turns - turn) / max_turns) * 100
+        total_score += score
+
+    # Print Sequence of Actions
+    print("\n=== DRONE LOGS ===")
+    for drone_id in sorted(drone_logs.keys()):
+        print(f"\nDrone {drone_id}:")
+        for log in drone_logs[drone_id]:
+            print(log)
+    print(total_score)
+    return total_score
+
+def simulate(drones, warehouses, orders, products, max_turns): #Greedy Algorithm To Get Initial Solution
     current_turn = 0
     total_score = 0
     reserved_items = defaultdict(lambda: defaultdict(int))
     pending_orders = orders
     order_completion_turn = {}
     drone_logs = defaultdict(list)
-    
-    orders_seq = []
-    for o in pending_orders.values():
-        orders_seq.append(o.order_id)
 
-    print(orders_seq)
     while current_turn <= max_turns and pending_orders:
         for drone in drones:
             if drone.busy_until <= current_turn:
@@ -70,56 +100,14 @@ def simulation_greedy(drones, warehouses, orders, products, max_turns): #Greedy 
                     action = drone.queue.pop(0)
 
                     if action[0] == 'load':
-                        _, warehouse, product, quantity, order = action
-                        if drone.location != warehouse.location:
-                            dist = drone.location.euclidean_distance(warehouse.location)
-                            start = current_turn
-                            end = current_turn + dist
-                            drone.move_to(warehouse.location)
-                            drone_logs[drone.drone_id].append(f"● flies to warehouse {warehouse.warehouse_id} in turns {start} to {end}")
-                            drone.busy_until = end + 1
-                        
-                        drone.load(warehouse, product, quantity)
-                        drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until}")
-                        drone.busy_until += 1
+                        execute_load_action(drone, action, current_turn, drone_logs)
 
                     elif action[0] == 'deliver':
-                        _, order, product, quantity = action
-                        if drone.location != order.location:
-                            dist = drone.location.euclidean_distance(order.location)
-                            start = current_turn
-                            end = current_turn + dist
-                            drone.move_to(order.location)
-                            drone_logs[drone.drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
-                            drone.busy_until = end + 1
-
-                        drone.deliver(order, product, quantity)
-                        drone_logs[drone.drone_id].append(f"● delivers item {product.product_id} to order {order.order_id} in turn {drone.busy_until}")
-
-
-                        if all(qty == 0 for qty in order.items.values()):
-                            order_completion_turn[order.order_id] = drone.busy_until
-                            del pending_orders[order.order_id]
-                            score = ((max_turns - drone.busy_until) / max_turns) * 100
-                            drone_logs[drone.drone_id].append(f"● Order {order.order_id} has been fulfilled in turn {drone.busy_until}, scoring {score:.0f} points")
-        
-                        drone.busy_until += 1
+                        execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns)
 
         current_turn += 1
 
-    # Score total
-    for order_id, turn in order_completion_turn.items():
-        score = ((max_turns - turn) / max_turns) * 100
-        total_score += score
-
-    # Imprimir logs organizados por drone
-    print("\n=== DRONE LOGS ===")
-    for drone_id in sorted(drone_logs.keys()):
-        print(f"\nDrone {drone_id}:")
-        for log in drone_logs[drone_id]:
-            print(log)
-    print(total_score)
-    return total_score
+    return score_and_logs(order_completion_turn, max_turns, drone_logs)
 
 def swap_two_orders(pending_orders):
     """Gera uma nova ordem de atendimento trocando dois pedidos."""
@@ -134,7 +122,7 @@ def simulated_annealing(drones, warehouses, orders, products, max_turns, initial
     # Inicializar a solução atual usando o algoritmo guloso
     current_orders = {o.order_id: o for o in orders}
     current_orders = dict(sorted(current_orders.items(), key=lambda item: len(item[1].items)))
-    current_score = simulation_greedy(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(current_orders), products, max_turns)
+    current_score = simulate(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(current_orders), products, max_turns)
     best_score = current_score
     best_orders = copy.deepcopy(current_orders)
     max_iterations= 20
@@ -151,7 +139,7 @@ def simulated_annealing(drones, warehouses, orders, products, max_turns, initial
         new_orders_sequence = tuple(new_orders.keys())
         if(new_orders_sequence not in orders_history):
             orders_history.add(new_orders_sequence)
-            new_score = simulation_greedy(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(new_orders), products, max_turns)
+            new_score = simulate(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(new_orders), products, max_turns)
             
             # Calcular a diferença de score
             delta = new_score - current_score
