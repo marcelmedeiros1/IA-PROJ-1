@@ -59,12 +59,13 @@ def assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, prod
                 if warehouse:
                     available_to_reserve = order.items[product_id] - reserved_items[order.order_id][product_id]
                     if available_to_reserve > 0:
-                        found = True
                         quantity_to_reserve = min(quantity, available_to_reserve)
-                        reserved_items[order.order_id][product_id] += quantity_to_reserve
-                        drone.queue.append(('load', warehouse, product, quantity_to_reserve, order))
-                        drone.queue.append(('deliver', order, product, quantity_to_reserve))
-                        break
+                        if (quantity_to_reserve * product.weight) <= (drone.max_payload - drone.payload):
+                            found = True
+                            reserved_items[order.order_id][product_id] += quantity_to_reserve
+                            drone.queue.append(('load', warehouse, product, quantity_to_reserve, order))
+                            drone.queue.append(('deliver', order, product, quantity_to_reserve))
+                            break
             if found:
                 break
 
