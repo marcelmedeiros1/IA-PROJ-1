@@ -19,23 +19,14 @@ class AntColonyOpt:
         self.q = q
         self.pheromone = {(w.warehouse_id, o.order_id): 1.0 for w in self.warehouses for o in self.orders}
         self.best_path = []
-        self.in_turns = 0
-        self.out_turns = 0
         self.score = 0
+        self.in_turns = 0
+        self.completed_turns = 0
         self.best_path_distance = math.inf
     
-    def evaluate_turns(self):
-        self.aux_turns -= 1
-        if(self.aux_turns < 0):
-            self.out_turns += 1
-        else:
-            self.in_turns += 1
-    
     def construct_score(self):
-        score = ((self.in_turns - self.out_turns) / self.in_turns) * 100
-        self.aux_turns = self.num_turns
+        score = ((self.num_turns - self.in_turns) / self.num_turns) * 100
         self.in_turns = 0
-        self.out_turns = 0
         return score
 
     def heuristic(self, warehouse, order):
@@ -50,11 +41,12 @@ class AntColonyOpt:
         for iteration in range(self.num_iterations):
             solutions = []
             for ant in range(self.num_ants):
-                solution, cost = self.construct_solution()
-                solutions.append((solution, cost))
+                solution, cost, completed_turns = self.construct_solution()
+                solutions.append((solution, cost, completed_turns))
                 if cost < self.best_path_distance:
                     self.best_path = solution
                     self.best_path_distance = cost
+                    self.completed_turns = completed_turns
             self.update_pheromone(solutions)
         self.score = self.best_path_distance
         return self.best_path
@@ -65,11 +57,14 @@ class AntColonyOpt:
         new_warehouses = copy.deepcopy(self.warehouses)
         new_orders = copy.deepcopy(self.orders)
         new_drones = copy.deepcopy(self.drones)
+        completed_turns = 0
+        score = 0
 
         for order in new_orders:
             order_solution = []  # Solution specific to this order
             warehouses_visited = []  # List of warehouses visited
             commands = []  # Sequence of commands
+            drones_used = []  # List of drones used for this order
 
             for product_id, quantity in list(order.items.items()):  # Iterate over the products required for the order
                 remaining_quantity = quantity  # Quantity left to be delivered
@@ -81,11 +76,6 @@ class AntColonyOpt:
                     ]
 
                     if not valid_warehouses_with_stock:
-                        for warehouse in new_warehouses:
-                            for product in warehouse.stock:
-                                if(product == product_id):
-                                    print(f"product_id: {product_id} - warehouse_id: {warehouse.warehouse_id} - stock: {warehouse.stock[product]}")
-                        
                         raise Exception(f"Nenhum armazém tem estoque suficiente do produto {product_id} para atender ao pedido {order.order_id}")
 
                     # Choose the best warehouse based on the heuristic
@@ -101,37 +91,41 @@ class AntColonyOpt:
                     if load_quantity == 0:
                         raise Exception(f"Produto {product_id} não pode ser carregado por nenhum drone devido ao peso.")
 
-                
                     # Check if the drone can carry the load
                     count = new_drones.__len__()
                     aux = copy.deepcopy(new_drones)
-                    while(count > 0):
+                    while count > 0:
                         # Choose the best drone based on the distance to the warehouse
-                        best_drone = min(aux, key=lambda d: d.location.euclidean_distance(best_warehouse.location))
-                        if (best_drone.payload + self.products[product_id].weight * load_quantity) > best_drone.max_payload:
+                        best_drone_aux = min(aux, key=lambda d: d.location.euclidean_distance(best_warehouse.location))
+                        if (best_drone_aux.payload + self.products[product_id].weight * load_quantity) > best_drone_aux.max_payload:
                             # If the drone cannot carry the load, try another drone
-                            aux.remove(best_drone)
+                            aux.remove(best_drone_aux)
                         else:
+                            for drone in new_drones:
+                                if drone.drone_id == best_drone_aux.drone_id:
+                                    best_drone = drone
                             break
                         count -= 1
 
-                    # Move the drone to the warehouse and then to the order location
-                    travel_time = best_drone.move_to(best_warehouse.location) + best_drone.move_to(order.location)
+                    # Add the drone to the list of drones used for this order
+                    if best_drone.drone_id not in drones_used:
+                        drones_used.append(best_drone.drone_id)
 
+                    self.in_turns += best_drone.move_to(best_warehouse.location)
                     # Load the product onto the drone
                     if not best_drone.load(best_warehouse, self.products[product_id], load_quantity):
                         raise Exception(f"Erro ao carregar produto {product_id} no drone {best_drone.drone_id}")
 
                     commands.append(f"Load {product_id} from Warehouse {best_warehouse.warehouse_id}")
-                    self.evaluate_turns()
+                    self.in_turns += 1
 
+                    self.in_turns += best_drone.move_to(order.location)
                     # Deliver the product to the order location
                     if not best_drone.deliver(order, self.products[product_id], load_quantity):
                         raise Exception(f"Erro ao entregar produto {product_id} do pedido {order.order_id}")
 
                     commands.append(f"Deliver {product_id} to Order {order.order_id}")
-                    self.evaluate_turns()
-
+                    self.in_turns += 1
 
                     # Update the remaining quantity and warehouse stock
                     remaining_quantity -= load_quantity
@@ -141,11 +135,12 @@ class AntColonyOpt:
                         warehouses_visited.append(best_warehouse.warehouse_id)
 
             # Add the solution for this order
-            
-            order_solution = [best_drone.drone_id, warehouses_visited, order.order_id, commands]
+            order_solution = [drones_used, warehouses_visited, order.order_id, commands]
             solution.append(order_solution)
-            score = self.construct_score()
-        return solution, score
+            completed_turns += self.in_turns
+            score += self.construct_score()
+
+        return solution, score, completed_turns
 
     def update_pheromone(self, solutions):
         # Evaporate pheromone
@@ -153,9 +148,9 @@ class AntColonyOpt:
             self.pheromone[key] *= (1 - self.evaporation_rate)
 
         # Add pheromone based on solutions
-        for solution, cost in solutions:
+        for solution, cost, completed_turns in solutions:
             pheromone_amount = self.q / cost
-            for best_drone_id, warehouses_visited, order_id, commands in solution:
+            for drones_used, warehouses_visited, order_id, commands in solution:
                 for warehouse_id in warehouses_visited:
                     self.pheromone[(warehouse_id, order_id)] += pheromone_amount
 
@@ -163,9 +158,9 @@ class AntColonyOpt:
         print("Ant Colony Optimization Solution:")
         print("=" * 40)
         for order_solution in self.best_path:
-            best_drone_id, warehouses_visited, order_id, commands = order_solution
+            drones_used, warehouses_visited, order_id, commands = order_solution
             print(f"Order ID: {order_id}")
-            print(f"  Drone ID: {best_drone_id}")
+            print(f"  Drones Used: {', '.join(map(str, drones_used))}")
             print(f"  Warehouses Visited: {', '.join(map(str, warehouses_visited))}")
             print(f"  Commands:")
             for command in commands:
@@ -173,6 +168,6 @@ class AntColonyOpt:
         print("-" * 40)
         print("Ant Colony Optimization Solution:")
         print("=" * 40)
-        print(f"Completed in {self.in_turns + self.out_turns} turns")
-        print(f"Score: {self.score:.2f}%")
+        print(f"Completed in {round(self.completed_turns)} turns")
+        print(f"Score: {self.score:.2f}")
         print("-" * 40)

@@ -15,11 +15,11 @@ from algorithms.algorithm import *
 # Testing Parsing
 # python3 main.py > parsing_test.txt (command to execute)
 
-simulation_data = parse_file("busy_day.in")
+simulation_data = parse_file("redundancy.in")
 simulation = Simulation(simulation_data)
 #simulation.testing_parse()
 
 # Testing Algorithm
-aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, len(simulation.drones), simulation.deadline)
+aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10, simulation.deadline)
 solution = aco.run()
 aco.print_solution()
