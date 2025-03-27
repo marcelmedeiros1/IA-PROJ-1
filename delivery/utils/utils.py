@@ -15,7 +15,7 @@ def find_warehouse_with_product(warehouses: List[Warehouse], product_id, quantit
 
 def execute_load_action(drone, action, current_turn, drone_logs):
     if action[0] == 'load':
-        _, warehouse, product, quantity, order = action
+        _, order, product, quantity, warehouse = action
         if drone.location != warehouse.location:
             dist = drone.location.euclidean_distance(warehouse.location)
             start = current_turn
@@ -27,9 +27,11 @@ def execute_load_action(drone, action, current_turn, drone_logs):
         drone.load(warehouse, product, quantity)
         drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until}")
         drone.busy_until += 1
+    
+    return drone.busy_until - 1
 
 def execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns):
-    _, order, product, quantity = action
+    _, order, product, quantity, warehouse = action
     if drone.location != order.location:
         dist = drone.location.euclidean_distance(order.location)
         start = current_turn
@@ -49,25 +51,28 @@ def execute_deliver_action(drone, action, current_turn, drone_logs, order_comple
 
     drone.busy_until += 1
 
+    return drone.busy_until - 1
+
 def assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, products):
-    if not drone.queue:
-        found = False
-        for order in list(pending_orders.values()):
-            for product_id, quantity in list(order.items.items()):
-                product = products[product_id]
-                warehouse = find_warehouse_with_product(warehouses, product_id, quantity)
-                if warehouse:
-                    available_to_reserve = order.items[product_id] - reserved_items[order.order_id][product_id]
-                    if available_to_reserve > 0:
-                        quantity_to_reserve = min(quantity, available_to_reserve)
-                        if (quantity_to_reserve * product.weight) <= (drone.max_payload - drone.payload):
-                            found = True
-                            reserved_items[order.order_id][product_id] += quantity_to_reserve
-                            drone.queue.append(('load', warehouse, product, quantity_to_reserve, order))
-                            drone.queue.append(('deliver', order, product, quantity_to_reserve))
-                            break
-            if found:
-                break
+    found = False
+    for order in list(pending_orders.values()):
+        for product_id, quantity in list(order.items.items()):
+            product = products[product_id]
+            warehouse = find_warehouse_with_product(warehouses, product_id, quantity)
+            if warehouse:
+                available_to_reserve = order.items[product_id] - reserved_items[order.order_id][product_id]
+                if available_to_reserve > 0:
+                    quantity_to_reserve = min(quantity, available_to_reserve)
+                    if (quantity_to_reserve * product.weight) <= (drone.max_payload - drone.payload):
+                        found = True
+                        reserved_items[order.order_id][product_id] += quantity_to_reserve
+                        drone.queue.append(('load', order, product, quantity_to_reserve, warehouse))
+                        drone.queue.append(('deliver', order, product, quantity_to_reserve, warehouse))
+                        break
+        if found:
+            break
+
+
 
 def score_and_logs(order_completion_turn, max_turns, drone_logs):
     total_score = 0
@@ -85,8 +90,8 @@ def score_and_logs(order_completion_turn, max_turns, drone_logs):
     return total_score
 
 def simulate(drones, warehouses, orders, products, max_turns): #Greedy Algorithm To Get Initial Solution
+    drones_actions = defaultdict(lambda: defaultdict(list))
     current_turn = 0
-    total_score = 0
     reserved_items = defaultdict(lambda: defaultdict(int))
     pending_orders = orders
     order_completion_turn = {}
@@ -95,17 +100,23 @@ def simulate(drones, warehouses, orders, products, max_turns): #Greedy Algorithm
     while current_turn <= max_turns and pending_orders:
         for drone in drones:
             if drone.busy_until <= current_turn:
-                assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, products)
+                if not drone.queue:
+                    assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, products)
 
                 if drone.queue:
                     action = drone.queue.pop(0)
+                    _, order, product, quantity, warehouse = action
 
                     if action[0] == 'load':
-                        execute_load_action(drone, action, current_turn, drone_logs)
+                        completed_load = execute_load_action(drone, action, current_turn, drone_logs)
+                        load = Action('load', product.product_id, quantity, warehouse, completed_load)
+                        drones_actions[drone.drone_id][order.order_id].append(load)
 
-                    elif action[0] == 'deliver':
-                        execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns)
-
+                    if action[0] == 'deliver':
+                        completed_delivery = execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns)
+                        delivery = Action('deliver', product.product_id, quantity, warehouse, completed_delivery)
+                        drones_actions[drone.drone_id][order.order_id].append(delivery)
+                                        
         current_turn += 1
 
     return score_and_logs(order_completion_turn, max_turns, drone_logs)
@@ -169,3 +180,29 @@ def simulated_annealing(drones, warehouses, orders, products, max_turns, initial
     
     return best_orders, best_score
 
+
+
+def gerar_vizinho(orders, warehouses, drones): #Esqueleto para gerar vizinho, precisaria alterar o orders.items() para suportar pedido.items()[warehouse, drone]
+    vizinho = copy.deepcopy(orders)
+    operador = random.choice(['swap', 'reinsertion', '2-opt', 'change_warehouse', 'change_drone'])
+
+    if operador == 'change_warehouse':
+        pedido = random.choice(list(vizinho.values()))
+        produto_id = random.choice(list(pedido.items.keys()))
+        quantidade = pedido.items[produto_id]
+        armazens_disponiveis = [w for w in warehouses if w.has_product(produto_id, quantidade)]
+        if armazens_disponiveis:
+            novo_armazem = random.choice(armazens_disponiveis)
+            pedido.items[produto_id]['warehouse'] = novo_armazem
+
+    elif operador == 'change_drone':
+        pedido = random.choice(list(vizinho.values()))
+        produto_id = random.choice(list(pedido.items.keys()))
+        drones_disponiveis = [d for d in drones if d.can_carry(pedido.items[produto_id]['weight'])]
+        if drones_disponiveis:
+            novo_drone = random.choice(drones_disponiveis)
+            pedido.items[produto_id]['drone'] = novo_drone
+
+    # Implementação dos outros operadores ('swap', 'reinsertion', '2-opt') permanece a mesma
+
+    return vizinho
