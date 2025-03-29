@@ -19,7 +19,7 @@ import copy
 
 
 # Testing Brute-Force
-simulation_data = parse_file("tiny.in")
+simulation_data = parse_file("busy_day.in")
 simulation_o = Simulation(simulation_data)
 simulation = copy.deepcopy(simulation_o)
 

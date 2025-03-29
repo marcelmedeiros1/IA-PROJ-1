@@ -62,7 +62,9 @@ def assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, prod
             if warehouse:
                 available_to_reserve = order.items[product_id] - reserved_items[order.order_id][product_id]
                 if available_to_reserve > 0:
+                    max_loadable_quantity = (drone.max_payload - drone.payload) // product.weight
                     quantity_to_reserve = min(quantity, available_to_reserve)
+                    quantity_to_reserve = min(quantity_to_reserve, max_loadable_quantity)
                     if (quantity_to_reserve * product.weight) <= (drone.max_payload - drone.payload):
                         found = True
                         reserved_items[order.order_id][product_id] += quantity_to_reserve
@@ -70,8 +72,9 @@ def assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, prod
                         drone.queue.append(('deliver', order, product, quantity_to_reserve, warehouse))
                         break
         if found:
-            break
-
+            return f"Drone {drone.drone_id} is assigned to order {order.order_id} for product {product_id} with quantity {quantity}"
+    if not found:
+        return "No available orders to pick up"
 
 
 def score_and_logs(order_completion_turn, max_turns, drone_logs):
@@ -96,21 +99,19 @@ def simulate(drones, warehouses, orders, products, max_turns): #Greedy Algorithm
     pending_orders = orders
     order_completion_turn = {}
     drone_logs = defaultdict(list)
-
-    while current_turn <= max_turns and pending_orders:
+    while pending_orders:
         for drone in drones:
             if drone.busy_until <= current_turn:
                 if not drone.queue:
                     assign_task_to_drone(drone, pending_orders, reserved_items, warehouses, products)
-
-                if drone.queue:
+                if drone.queue: 
                     action = drone.queue.pop(0)
                     _, order, product, quantity, warehouse = action
-
                     if action[0] == 'load':
                         completed_load = execute_load_action(drone, action, current_turn, drone_logs)
                         load = Action('load', product.product_id, quantity, warehouse, completed_load)
                         drones_actions[drone.drone_id][order.order_id].append(load)
+                        # print(f"Drone {drone.drone_id} loaded {quantity} of product {product.product_id} from warehouse {warehouse.warehouse_id} in turn {completed_load}")
 
                     if action[0] == 'deliver':
                         completed_delivery = execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns)
@@ -147,11 +148,19 @@ def simulated_annealing(drones, warehouses, orders, products, max_turns, initial
 
     while temperature > min_temperature and iteration < max_iterations:
         # Gerar uma solução vizinha
-        new_orders = swap_two_orders(copy.deepcopy(current_orders))
+        operator = random.choice([
+            swap_actions_between_drones,
+            reorder_drone_actions,
+            modify_product_quantity,
+        ])
+
+        new_drones_actions = operator(copy.deepcopy(drones_actions), max_payload)
         new_orders_sequence = tuple(new_orders.keys())
         if(new_orders_sequence not in orders_history):
             orders_history.add(new_orders_sequence)
+            print(f"Iniciando iteração {iteration}")
             new_score = simulate(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(new_orders), products, max_turns)
+            print("Terminei")
             
             # Calcular a diferença de score
             delta = new_score - current_score
@@ -161,8 +170,6 @@ def simulated_annealing(drones, warehouses, orders, products, max_turns, initial
                 current_orders = new_orders
                 current_score = new_score
                 no_improvement_counter = 0
-            else:
-                no_improvement_counter += 1
             
             # Atualizar a melhor solução encontrada
             if current_score > best_score:
@@ -173,36 +180,81 @@ def simulated_annealing(drones, warehouses, orders, products, max_turns, initial
             # Resfriar a temperatura
             temperature *= cooling_rate
 
-            # Critério de parada adicional: sem melhoria após N iterações
-            if no_improvement_counter >= 500:
-                break
         iteration += 1
     
     return best_orders, best_score
 
 
+def swap_actions_between_drones(drones_actions):
+    """Troca uma sequência de ações entre dois drones."""
+    drone_ids = list(drones_actions.keys())
+    if len(drone_ids) < 2:
+        return drones_actions  # Nada para trocar
 
-def gerar_vizinho(orders, warehouses, drones): #Esqueleto para gerar vizinho, precisaria alterar o orders.items() para suportar pedido.items()[warehouse, drone]
-    vizinho = copy.deepcopy(orders)
-    operador = random.choice(['swap', 'reinsertion', '2-opt', 'change_warehouse', 'change_drone'])
+    drone1, drone2 = random.sample(drone_ids, 2)
+    order_ids1 = list(drones_actions[drone1].keys())
+    order_ids2 = list(drones_actions[drone2].keys())
 
-    if operador == 'change_warehouse':
-        pedido = random.choice(list(vizinho.values()))
-        produto_id = random.choice(list(pedido.items.keys()))
-        quantidade = pedido.items[produto_id]
-        armazens_disponiveis = [w for w in warehouses if w.has_product(produto_id, quantidade)]
-        if armazens_disponiveis:
-            novo_armazem = random.choice(armazens_disponiveis)
-            pedido.items[produto_id]['warehouse'] = novo_armazem
+    if not order_ids1 or not order_ids2:
+        return drones_actions  # Um dos drones não tem ações
 
-    elif operador == 'change_drone':
-        pedido = random.choice(list(vizinho.values()))
-        produto_id = random.choice(list(pedido.items.keys()))
-        drones_disponiveis = [d for d in drones if d.can_carry(pedido.items[produto_id]['weight'])]
-        if drones_disponiveis:
-            novo_drone = random.choice(drones_disponiveis)
-            pedido.items[produto_id]['drone'] = novo_drone
+    order1 = random.choice(order_ids1)
+    order2 = random.choice(order_ids2)
 
-    # Implementação dos outros operadores ('swap', 'reinsertion', '2-opt') permanece a mesma
+    # Troca as ações entre os drones
+    drones_actions[drone1][order1], drones_actions[drone2][order2] = (
+        drones_actions[drone2][order2],
+        drones_actions[drone1][order1],
+    )
 
-    return vizinho
+    return drones_actions
+
+def reorder_drone_actions(drones_actions):
+    """Reordena as ações de um drone específico."""
+    drone_id = random.choice(list(drones_actions.keys()))
+    order_ids = list(drones_actions[drone_id].keys())
+
+    if not order_ids:
+        return drones_actions  # Drone não tem ações
+
+    order_id = random.choice(order_ids)
+    actions = drones_actions[drone_id][order_id]
+
+    if len(actions) < 2:
+        return drones_actions  # Não há ações suficientes para reordenar
+
+    # Reordena as ações aleatoriamente
+    random.shuffle(actions)
+    drones_actions[drone_id][order_id] = actions
+
+    return drones_actions
+
+def modify_product_quantity(drones_actions, max_payload):
+    """Modifica a quantidade de um produto a ser carregado ou entregue."""
+    drone_id = random.choice(list(drones_actions.keys()))
+    order_ids = list(drones_actions[drone_id].keys())
+
+    if not order_ids:
+        return drones_actions  # Drone não tem ações
+
+    order_id = random.choice(order_ids)
+    actions = drones_actions[drone_id][order_id]
+
+    if not actions:
+        return drones_actions  # Não há ações para modificar
+
+    action_index = random.randint(0, len(actions) - 1)
+    action = actions[action_index]
+
+    # Supondo que a ação seja uma tupla ('load'/'deliver', product_id, quantity, warehouse, turn)
+    action_type, product_id, quantity, warehouse, turn = action
+
+    # Modifica a quantidade respeitando a capacidade máxima de carga
+    new_quantity = min(quantity + random.randint(-2, 2), max_payload)
+    new_quantity = max(new_quantity, 1)  # Garante que seja pelo menos 1
+
+    new_action = (action_type, product_id, new_quantity, warehouse, turn)
+    actions[action_index] = new_action
+    drones_actions[drone_id][order_id] = actions
+
+    return drones_actions
