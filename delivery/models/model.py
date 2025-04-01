@@ -166,10 +166,9 @@ class Simulation:
         pass # Implement algorithms and call them here
 
 class Action:
-    def __init__(self, type, product_id, quantity, warehouse_id, turn):
+    def __init__(self, type, product_id, quantity, warehouse):
         self.type = type
         self.product_id = product_id
         self.quantity = quantity
-        self.warehouse_id = warehouse_id
-        self.turn = turn
+        self.warehouse = warehouse
     

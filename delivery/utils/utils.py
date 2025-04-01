@@ -108,105 +108,83 @@ def simulate(drones, warehouses, orders, products, max_turns): #Greedy Algorithm
                     action = drone.queue.pop(0)
                     _, order, product, quantity, warehouse = action
                     if action[0] == 'load':
-                        completed_load = execute_load_action(drone, action, current_turn, drone_logs)
-                        load = Action('load', product.product_id, quantity, warehouse, completed_load)
+                        execute_load_action(drone, action, current_turn, drone_logs)
+                        load = Action('load', product.product_id, quantity, warehouse)
                         drones_actions[drone.drone_id][order.order_id].append(load)
                         # print(f"Drone {drone.drone_id} loaded {quantity} of product {product.product_id} from warehouse {warehouse.warehouse_id} in turn {completed_load}")
 
                     if action[0] == 'deliver':
-                        completed_delivery = execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns)
-                        delivery = Action('deliver', product.product_id, quantity, warehouse, completed_delivery)
+                        execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders, max_turns)
+                        delivery = Action('deliver', product.product_id, quantity, warehouse)
                         drones_actions[drone.drone_id][order.order_id].append(delivery)
                                         
         current_turn += 1
 
-    return score_and_logs(order_completion_turn, max_turns, drone_logs)
-
-def swap_two_orders(pending_orders):
-    """Gera uma nova ordem de atendimento trocando dois pedidos."""
-    keys = list(pending_orders.keys())
-    if len(keys) < 2:
-        return pending_orders  # Nada para trocar
-    i, j = random.sample(range(len(keys)), 2)
-    keys[i], keys[j] = keys[j], keys[i]
-    return {k: pending_orders[k] for k in keys}
+    return drones_actions
 
 def simulated_annealing(drones, warehouses, orders, products, max_turns, initial_temperature, cooling_rate, min_temperature, max_iterations):
     # Inicializar a solução atual usando o algoritmo guloso
     current_orders = {o.order_id: o for o in orders}
-    current_orders = dict(sorted(current_orders.items(), key=lambda item: len(item[1].items)))
-    current_score = simulate(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(current_orders), products, max_turns)
+    current_orders = dict(sorted(current_orders.items(), key=lambda item: len(item[1].items))) # Greedy Strategy: Inspiration - https://github.com/msagi/hash-code-2016-qualification/blob/master/README.md
+    drones_actions = simulate(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(current_orders), products, max_turns)
+    current_score = calculate_score(drones_actions, copy.deepcopy(current_orders), max_turns)
+
     best_score = current_score
-    best_orders = copy.deepcopy(current_orders)
-    max_iterations= 20
     temperature = initial_temperature
-    no_improvement_counter = 0
     iteration = 0
 
-    orders_history = set()
-    orders_history.add(tuple(current_orders.keys()))
-
     while temperature > min_temperature and iteration < max_iterations:
+        print(f"\nIniciando iteração {iteration} com temperatura {temperature:.2f}")
+
         # Gerar uma solução vizinha
         operator = random.choice([
-            swap_actions_between_drones,
+            move_order_to_another_drone,
             reorder_drone_actions,
-            modify_product_quantity,
+            swap_action_pairs_between_drones  
         ])
 
-        new_drones_actions = operator(copy.deepcopy(drones_actions), max_payload)
-        new_orders_sequence = tuple(new_orders.keys())
-        if(new_orders_sequence not in orders_history):
-            orders_history.add(new_orders_sequence)
-            print(f"Iniciando iteração {iteration}")
-            new_score = simulate(copy.deepcopy(drones), copy.deepcopy(warehouses), copy.deepcopy(new_orders), products, max_turns)
-            print("Terminei")
-            
+        new_drones_actions = operator(copy.deepcopy(drones_actions))
+        new_score = calculate_score(new_drones_actions, copy.deepcopy(current_orders), max_turns)
+        print(f"[Iter {iteration}] Score atual: {current_score:.2f} | Novo: {new_score:.2f}")
             # Calcular a diferença de score
-            delta = new_score - current_score
-            
-            # Decidir se aceita a nova solução
-            if delta > 0 or random.random() < math.exp(delta / temperature):
-                current_orders = new_orders
-                current_score = new_score
-                no_improvement_counter = 0
-            
-            # Atualizar a melhor solução encontrada
-            if current_score > best_score:
-                print(f"[Iter {iteration}] Score atual: {current_score:.2f} | Melhor: {best_score:.2f} | Temp: {temperature:.4f}")
-                best_score = current_score
-                best_orders = copy.deepcopy(current_orders)
-            
-            # Resfriar a temperatura
-            temperature *= cooling_rate
+        delta = new_score - current_score
+        
+        # Decidir se aceita a nova solução
+        if delta > 0 or random.random() < math.exp(delta / temperature):
+            current_score = new_score
+        
+        # Atualizar a melhor solução encontrada
+        if current_score > best_score:
+            print(f"[Iter {iteration}] Score atual: {current_score:.2f} | Melhor: {best_score:.2f} | Temp: {temperature:.4f}")
+            best_score = current_score
+            best_orders = copy.deepcopy(current_orders)
+        
+        # Resfriar a temperatura
+        temperature *= cooling_rate
 
         iteration += 1
     
     return best_orders, best_score
 
 
-def swap_actions_between_drones(drones_actions):
-    """Troca uma sequência de ações entre dois drones."""
+def move_order_to_another_drone(drones_actions):
+    """Move um pedido inteiro de um drone para outro."""
     drone_ids = list(drones_actions.keys())
     if len(drone_ids) < 2:
-        return drones_actions  # Nada para trocar
+        return drones_actions
 
-    drone1, drone2 = random.sample(drone_ids, 2)
-    order_ids1 = list(drones_actions[drone1].keys())
-    order_ids2 = list(drones_actions[drone2].keys())
+    drone_from, drone_to = random.sample(drone_ids, 2)
+    orders_from = drones_actions[drone_from]
+    if not orders_from:
+        return drones_actions
 
-    if not order_ids1 or not order_ids2:
-        return drones_actions  # Um dos drones não tem ações
+    order_id = random.choice(list(orders_from.keys()))
+    actions = orders_from.pop(order_id)
 
-    order1 = random.choice(order_ids1)
-    order2 = random.choice(order_ids2)
+    if order_id not in drones_actions[drone_to]:
+        drones_actions[drone_to][order_id] = []
 
-    # Troca as ações entre os drones
-    drones_actions[drone1][order1], drones_actions[drone2][order2] = (
-        drones_actions[drone2][order2],
-        drones_actions[drone1][order1],
-    )
-
+    drones_actions[drone_to][order_id].extend(actions)
     return drones_actions
 
 def reorder_drone_actions(drones_actions):
@@ -229,32 +207,88 @@ def reorder_drone_actions(drones_actions):
 
     return drones_actions
 
-def modify_product_quantity(drones_actions, max_payload):
-    """Modifica a quantidade de um produto a ser carregado ou entregue."""
-    drone_id = random.choice(list(drones_actions.keys()))
-    order_ids = list(drones_actions[drone_id].keys())
+def swap_action_pairs_between_drones(drones_actions):
+    """Troca um par (load + deliver) entre dois drones."""
+    drone_ids = list(drones_actions.keys())
+    if len(drone_ids) < 2:
+        return drones_actions
 
-    if not order_ids:
-        return drones_actions  # Drone não tem ações
+    drone1, drone2 = random.sample(drone_ids, 2)
+    orders1 = drones_actions[drone1]
+    orders2 = drones_actions[drone2]
 
-    order_id = random.choice(order_ids)
-    actions = drones_actions[drone_id][order_id]
+    if not orders1 or not orders2:
+        return drones_actions
 
-    if not actions:
-        return drones_actions  # Não há ações para modificar
+    order1_id = random.choice(list(orders1.keys()))
+    order2_id = random.choice(list(orders2.keys()))
+    actions1 = orders1[order1_id]
+    actions2 = orders2[order2_id]
 
-    action_index = random.randint(0, len(actions) - 1)
-    action = actions[action_index]
+    if len(actions1) < 2 or len(actions2) < 2:
+        return drones_actions
 
-    # Supondo que a ação seja uma tupla ('load'/'deliver', product_id, quantity, warehouse, turn)
-    action_type, product_id, quantity, warehouse, turn = action
-
-    # Modifica a quantidade respeitando a capacidade máxima de carga
-    new_quantity = min(quantity + random.randint(-2, 2), max_payload)
-    new_quantity = max(new_quantity, 1)  # Garante que seja pelo menos 1
-
-    new_action = (action_type, product_id, new_quantity, warehouse, turn)
-    actions[action_index] = new_action
-    drones_actions[drone_id][order_id] = actions
+    # Troca os dois primeiros pares de ação
+    actions1[:2], actions2[:2] = actions2[:2], actions1[:2]
+    drones_actions[drone1][order1_id] = actions1
+    drones_actions[drone2][order2_id] = actions2
 
     return drones_actions
+
+
+def calculate_score(drones_actions, orders, max_turns):
+    """Calcula o score total de todas as ações dos drones."""
+    total_score = 0
+    order_completion_turn = {}
+    order_remaining_items = {order_id: copy.deepcopy(orders[order_id].items) for order_id in orders}
+    drone_states = {}
+    
+    for drone_id in drones_actions:
+        drone_states[drone_id] = {
+            "location": None,  # Inicialize se quiser com localização do drone
+            "turn": 0
+        }
+
+    for drone_id, orders_actions in drones_actions.items():
+        state = drone_states[drone_id]
+
+        for order_id, actions in orders_actions.items():
+            for action in actions:
+                # Calcular o tempo até o local (simplificado)
+                target_location = None
+                if action.type == 'load':
+                    target_location = action.warehouse.location
+                elif action.type == 'deliver':
+                    target_location = orders[order_id].location
+
+                if state["location"] is not None:
+                    dist = state["location"].euclidean_distance(target_location)
+                else:
+                    dist = 0  # Se a localização não for conhecida, assume que começa lá
+
+                # Move e atualiza tempo
+                state["turn"] += math.ceil(dist)
+                state["location"] = target_location
+
+                # Tempo da ação (load/deliver)
+                state["turn"] += 1
+
+                if action.type == 'deliver':
+                    # Atualiza o pedido
+                    remaining = order_remaining_items[order_id]
+                    if(action.product_id in remaining):
+                        remaining[action.product_id] -= action.quantity
+                        if remaining[action.product_id] <= 0:
+                            remaining[action.product_id] = 0
+
+                    # Verifica se o pedido foi concluído
+                    if all(qty == 0 for qty in remaining.values()):
+                        if order_id not in order_completion_turn:
+                            order_completion_turn[order_id] = state["turn"]
+
+    # Agora calcula o score
+    for order_id, completion_turn in order_completion_turn.items():
+        score = ((max_turns - completion_turn) / max_turns) * 100
+        total_score += score
+
+    return total_score
