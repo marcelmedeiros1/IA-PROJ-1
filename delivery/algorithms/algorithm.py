@@ -1,6 +1,11 @@
 import random
 import math
 import copy
+from collections import defaultdict
+from typing import List
+from models.model import *
+
+
 
 class AntColonyOpt:
     def __init__(self, grid, drones, warehouses, orders, products, num_ants, num_iterations=100, alpha=1.0, beta=2.0, evaporation_rate=0.5, q=100):
@@ -145,3 +150,260 @@ class AntColonyOpt:
             for command in commands:
                 print(f"    - {command}")
         print("-" * 40)
+
+class SimulatedAnnealingOptimizer:
+    def __init__(self, drones, warehouses, orders, products, max_turns):
+        self.drones = drones
+        self.warehouses = warehouses
+        self.orders = {o.order_id: o for o in orders}
+        self.products = products
+        self.max_turns = max_turns
+
+    def find_warehouse_with_product(self, warehouses, product_id, quantity):
+        for warehouse in warehouses:
+            if product_id in warehouse.stock and warehouse.stock[product_id] >= quantity:
+                return warehouse
+        return None
+
+    def assign_task_to_drone(self, drone, pending_orders, reserved_items, warehouses):
+        for order in list(pending_orders.values()):
+            for product_id, quantity in list(order.items.items()):
+                product = self.products[product_id]
+                warehouse = self.find_warehouse_with_product(warehouses, product_id, quantity)
+                if warehouse:
+                    available = order.items[product_id] - reserved_items[order.order_id][product_id]
+                    if available > 0:
+                        max_qty = (drone.max_payload - drone.payload) // product.weight
+                        qty = min(quantity, available, max_qty)
+                        if qty * product.weight <= (drone.max_payload - drone.payload):
+                            reserved_items[order.order_id][product_id] += qty
+                            drone.queue.append(('load', order, product, qty, warehouse))
+                            drone.queue.append(('deliver', order, product, qty, warehouse))
+                            return
+
+    def execute_load_action(self, drone, action, current_turn, drone_logs):
+        _, order, product, quantity, warehouse = action
+        if drone.location != warehouse.location:
+            dist = drone.location.euclidean_distance(warehouse.location)
+            start, end = current_turn, current_turn + dist
+            drone.move_to(warehouse.location)
+            drone_logs[drone.drone_id].append(f"● flies to warehouse {warehouse.warehouse_id} in turns {start} to {end}")
+            drone.busy_until = end + 1
+
+        drone.load(warehouse, product, quantity)
+        drone_logs[drone.drone_id].append(f"● loads item {product.product_id} from warehouse {warehouse.warehouse_id} in turn {drone.busy_until}")
+        drone.busy_until += 1
+        return drone.busy_until - 1
+
+    def execute_deliver_action(self, drone, action, current_turn, drone_logs, order_completion_turn, pending_orders):
+        _, order, product, quantity, warehouse = action
+        if drone.location != order.location:
+            dist = drone.location.euclidean_distance(order.location)
+            start, end = current_turn, current_turn + dist
+            drone.move_to(order.location)
+            drone_logs[drone.drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
+            drone.busy_until = end + 1
+
+        drone.deliver(order, product, quantity)
+        drone_logs[drone.drone_id].append(f"● delivers item {product.product_id} to order {order.order_id} in turn {drone.busy_until}")
+
+        if all(qty == 0 for qty in order.items.values()):
+            order_completion_turn[order.order_id] = drone.busy_until
+            pending_orders.pop(order.order_id)
+            score = ((self.max_turns - drone.busy_until) / self.max_turns) * 100
+            drone_logs[drone.drone_id].append(f"● Order {order.order_id} fulfilled in turn {drone.busy_until}, score {score:.0f}")
+        drone.busy_until += 1
+        return drone.busy_until - 1
+
+    def simulate(self, drones, warehouses, orders):
+        drones_actions = defaultdict(lambda: defaultdict(list))
+        current_turn = 0
+        reserved_items = defaultdict(lambda: defaultdict(int))
+        pending_orders = copy.deepcopy(orders)
+        order_completion_turn = {}
+        drone_logs = defaultdict(list)
+
+        while pending_orders:
+            for drone in drones:
+                if drone.busy_until <= current_turn:
+                    if not drone.queue:
+                        self.assign_task_to_drone(drone, pending_orders, reserved_items, warehouses)
+                    if drone.queue:
+                        action = drone.queue.pop(0)
+                        _, order, product, quantity, warehouse = action
+                        if action[0] == 'load':
+                            self.execute_load_action(drone, action, current_turn, drone_logs)
+                            load = Action('load', product.product_id, quantity, warehouse)
+                            drones_actions[drone.drone_id][order.order_id].append(load)
+                        if action[0] == 'deliver':
+                            self.execute_deliver_action(drone, action, current_turn, drone_logs, order_completion_turn, pending_orders)
+                            delivery = Action('deliver', product.product_id, quantity, warehouse)
+                            drones_actions[drone.drone_id][order.order_id].append(delivery)
+            current_turn += 1
+
+        return drones_actions
+
+    def calculate_score(self, drones_actions, orders):
+        total_score = 0
+        order_completion_turn = {}
+        order_remaining_items = {order_id: copy.deepcopy(orders[order_id].items) for order_id in orders}
+        drone_states = {drone_id: {"location": Location(0,0), "turn": 0} for drone_id in drones_actions}
+
+        for drone_id, orders_actions in drones_actions.items():
+            state = drone_states[drone_id]
+            for order_id, actions in orders_actions.items():
+                for action in actions:
+                    if action.type == 'load':
+                        loc = action.warehouse.location
+                        if state["location"].euclidean_distance(loc) > 0:
+                            dist = state["location"].euclidean_distance(loc)
+                            start, end = state["turn"], state["turn"] + math.ceil(dist)
+                            state["turn"] = end + 1
+                        state["location"] = loc
+                        state["turn"] += 1
+                    elif action.type == 'deliver':
+                        loc = orders[order_id].location
+                        remaining = order_remaining_items[order_id]
+                        if state["location"].euclidean_distance(loc) > 0:
+                            dist = state["location"].euclidean_distance(loc)
+                            start, end = state["turn"], state["turn"] + math.ceil(dist)
+                            state["turn"] = end + 1
+                        state["location"] = loc
+                        delivery_turn = state["turn"]
+                        state["turn"] += 1
+                        if action.product_id in remaining:
+                            remaining[action.product_id] -= action.quantity
+                            if remaining[action.product_id] <= 0:
+                                remaining[action.product_id] = 0
+                        if all(qty == 0 for qty in remaining.values()) and order_id not in order_completion_turn:
+                            order_completion_turn[order_id] = delivery_turn
+
+        total_score = sum(((self.max_turns - t) / self.max_turns) * 100 for t in order_completion_turn.values())
+
+        return total_score
+
+    # === OPERADORES ===
+    def move_order_to_another_drone(self, drones_actions):
+        drone_ids = list(drones_actions.keys())
+        if len(drone_ids) < 2:
+            return drones_actions
+        drone_from, drone_to = random.sample(drone_ids, 2)
+        orders_from = drones_actions[drone_from]
+        if not orders_from:
+            return drones_actions
+        order_id = random.choice(list(orders_from.keys()))
+        actions = orders_from.pop(order_id)
+        drones_actions[drone_to].setdefault(order_id, []).extend(actions)
+        return drones_actions
+
+    def swap_entire_orders_between_drones(self, drones_actions):
+        drone_ids = list(drones_actions.keys())
+        if len(drone_ids) < 2:
+            return drones_actions
+        d1, d2 = random.sample(drone_ids, 2)
+        orders1 = list(drones_actions[d1].keys())
+        orders2 = list(drones_actions[d2].keys())
+        if not orders1 or not orders2:
+            return drones_actions
+
+        o1 = random.choice(orders1)
+        o2 = random.choice(orders2)
+
+        drones_actions[d1][o1], drones_actions[d2][o2] = drones_actions[d2][o2], drones_actions[d1][o1]
+        return drones_actions
+
+    def run(self, initial_temperature, cooling_rate, min_temperature, max_iterations):
+        current_orders = dict(sorted(self.orders.items(), key=lambda item: len(item[1].items)))
+        drones_actions = self.simulate(copy.deepcopy(self.drones), copy.deepcopy(self.warehouses), current_orders)
+        current_score = self.calculate_score(drones_actions, current_orders)
+
+        best_score = current_score
+        best_drones_actions = copy.deepcopy(drones_actions)
+        temperature = initial_temperature
+        iteration = 0
+
+        while iteration < max_iterations and temperature > min_temperature:
+            print(f"\n[Iter {iteration}] Temp: {temperature:.2f}")
+            operator = random.choice([
+                self.move_order_to_another_drone,
+                # self.swap_entire_orders_between_drones
+            ])
+            new_drones_actions = operator(copy.deepcopy(drones_actions))
+            new_score = self.calculate_score(new_drones_actions, copy.deepcopy(current_orders))
+            delta = new_score - current_score
+
+            if delta > 0 or (delta < 0 and random.random() < math.exp(delta / temperature)):
+                drones_actions = new_drones_actions
+                current_score = new_score
+                print(f"✔️  Accepted Δ={delta:.2f}")
+
+            if current_score > best_score:
+                best_score = current_score
+                best_drones_actions = copy.deepcopy(drones_actions)
+                print(f"🌟 New Best Score: {best_score:.2f}")
+
+            temperature *= cooling_rate
+            iteration += 1
+
+        save_drone_logs_to_file(self, best_drones_actions)
+        print(f"✅ Final Best Score: {best_score:.2f}")
+        
+        return best_drones_actions, best_score
+    
+
+def save_drone_logs_to_file(self, drones_actions, filename="drone_logs.txt"):
+    drone_logs = defaultdict(list)
+    drone_states = {drone_id: {"location": Location(0,0), "turn": 0} for drone_id in drones_actions}
+    orders_copy = copy.deepcopy(self.orders)
+    order_completion_turn = {}
+
+    for drone_id, orders in drones_actions.items():
+        state = drone_states[drone_id]
+        for order_id, actions in orders.items():
+            for action in actions:
+                order = orders_copy[order_id]
+                if action.type == 'load':
+                    loc = action.warehouse.location
+                    if state["location"].euclidean_distance(loc) > 0:
+                        dist = state["location"].euclidean_distance(loc)
+                        start, end = state["turn"], state["turn"] + math.ceil(dist)
+                        drone_logs[drone_id].append(f"● flies to warehouse {action.warehouse.warehouse_id} in turns {start} to {end}")
+                        state["turn"] = end + 1
+                    state["location"] = loc
+                    drone_logs[drone_id].append(f"● loads item {action.product_id} from warehouse {action.warehouse.warehouse_id} in turn {state['turn']}")
+                    state["turn"] += 1
+
+                elif action.type == 'deliver':
+                    loc = order.location
+                    if state["location"].euclidean_distance(loc) > 0:
+                        dist = state["location"].euclidean_distance(loc)
+                        start, end = state["turn"], state["turn"] + math.ceil(dist)
+                        drone_logs[drone_id].append(f"● flies to order {order.order_id} in turns {start} to {end}")
+                        state["turn"] = end + 1
+                    state["location"] = loc
+                    delivery_turn = state["turn"]
+                    drone_logs[drone_id].append(f"● delivers item {action.product_id} to order {order.order_id} in turn {delivery_turn}")
+                    state["turn"] += 1
+                    if action.product_id in order.items:
+                        order.items[action.product_id] -= action.quantity
+                        if order.items[action.product_id] <= 0:
+                            order.items[action.product_id] = 0
+                    if all(qty == 0 for qty in order.items.values()) and order_id not in order_completion_turn:
+                        order_completion_turn[order_id] = delivery_turn
+                        score = ((self.max_turns - state["turn"]) / self.max_turns) * 100
+                        drone_logs[drone_id].append(f"● Order {order_id} has been fulfilled in turn {delivery_turn}, scoring {score:.0f} points")
+
+    total_score = sum(((self.max_turns - t) / self.max_turns) * 100 for t in order_completion_turn.values())
+
+    # Salva tudo no arquivo
+    with open(filename, "w") as f:
+        f.write("=== DRONE LOGS ===\n")
+        for drone_id in sorted(drone_logs.keys()):
+            f.write(f"\nDrone {drone_id}:\n")
+            for log in drone_logs[drone_id]:
+                f.write(log + "\n")
+        f.write(f"\n✅ Total Score: {total_score:.2f}\n")
+
+    print(f"📝 Logs salvos em '{filename}'")
+
+    return total_score

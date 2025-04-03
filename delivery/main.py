@@ -1,4 +1,3 @@
-from models.model import *
 from parsers.parsing import * 
 from algorithms.algorithm import *
 from utils.utils import *
@@ -19,31 +18,23 @@ import copy
 
 
 # Testing Brute-Force
-simulation_data = parse_file("busy_day.in")
-simulation_o = Simulation(simulation_data)
-simulation = copy.deepcopy(simulation_o)
-
-# drones_copy = copy.deepcopy(simulation.drones)
-# warehouses_copy = copy.deepcopy(simulation.warehouses)
-# orders_copy = copy.deepcopy(simulation.orders)
-# products_copy = copy.deepcopy(simulation.products)  # Opcional, se produtos mudam no seu código
-# # Rodando a simulação com os objetos copiados
-# total_score = simulation_greedy(drones_copy, warehouses_copy, orders_copy, products_copy, simulation.deadline)
-# print(total_score)
-
+simulation_data = parse_file("tiny.in")
+simulation = Simulation(simulation_data)
 
 # Parâmetros do Simulated Annealing
 initial_temperature = 100.0
 cooling_rate = 0.995
 min_temperature = 0.01
-max_iterations = 10000
+max_iterations = 50
 
 # Supondo que você já tenha as listas drones, warehouses, orders e products definidas, além do valor de max_turns
-best_orders, best_score = simulated_annealing(simulation.drones, simulation.warehouses, simulation.orders, simulation.products, simulation.deadline, initial_temperature, cooling_rate, min_temperature, max_iterations)
-
-print(f"Melhor score obtido: {best_score:.2f}")
-
-
+optimizer = SimulatedAnnealingOptimizer(simulation.drones, simulation.warehouses, simulation.orders, simulation.products, simulation.deadline)
+best_plan, best_score = optimizer.run(
+    initial_temperature=1000,
+    cooling_rate=0.98,
+    min_temperature=1.5,
+    max_iterations=2000
+)
 # simulation_data = parse_file("busy_day.in")
 # simulation = Simulation(simulation_data)
 # # Testing Algorithm
