@@ -41,3 +41,11 @@ best_plan, best_score = optimizer.run(
 # aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
 # solution = aco.run()
 # aco.print_solution()
+simulation_data = parse_file("redundancy.in")
+simulation = Simulation(simulation_data)
+#simulation.testing_parse()
+
+# Testing Algorithm
+aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
+solution = aco.run()
+aco.print_solution()
