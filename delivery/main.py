@@ -4,7 +4,7 @@ from algorithms.algorithm import *
 import copy
 
 def main():
-    data = parse_file("mother_of_all_warehouses.in")   
+    data = parse_file("busy_day.in")   
     sim = Simulation(data)
     # Supondo que você já tenha as listas drones, warehouses, orders e products definidas, além do valor de max_turns
     # optimizer = SimulatedAnnealingOptimizer(simulation.drones, simulation.warehouses, simulation.orders, simulation.products, simulation.deadline)

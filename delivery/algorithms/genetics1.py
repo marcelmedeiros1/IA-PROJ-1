@@ -211,9 +211,9 @@ def payloads_to_command_blocks(payloads):
 def build_greedy_chromosome(simulation, strategy="heavy"):
 
     if strategy == "heavy":
-        payloads = build_distance_priority_payloads(simulation)
+        payloads = build_heavy_lifting_payloads(simulation)
     elif strategy == "small_first":
-        payloads = build_distance_priority_payloads(simulation)
+        payloads = build_small_orders_payloads(simulation)
     elif strategy == "distance_first":
         payloads = build_distance_priority_payloads(simulation)
   
@@ -510,7 +510,7 @@ class GeneticAlgorithm:
         print("-" * 40)
 
 
-    def run(self, simulation):
+    def run(self, simulation, progress_callback=None):
         all_blocks = GeneticAlgorithm.create_blocks(simulation)
         population = []
         chrom_heavy = build_greedy_chromosome(simulation, strategy="heavy")
@@ -542,6 +542,8 @@ class GeneticAlgorithm:
             print(f"Generation {gen} | "
                 f"Gen best = {gen_best}, Gen avg = {gen_avg:.2f}, "
                 f"Gen worst = {gen_min}, Global best so far = {best_fitness}")
+            if progress_callback is not None:
+                progress_callback(gen, best_fitness)
             for chromosome, fitness in zip(population, fitnesses):
                 if fitness > best_fitness:
                     best_fitness = fitness
