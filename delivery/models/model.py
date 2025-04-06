@@ -55,17 +55,19 @@ class Drone:
         self.location = location
         return distance
     
-    def load(self, warehouse: Warehouse ,product: Product, quantity: int) -> bool:
-        if product.product_id in warehouse.stock and warehouse.stock[product.product_id] >= quantity:
-            totalWeight = sum(self.inventory.get(product.product_id, 0) * product.weight for product_id in self.inventory)
-            if totalWeight + product.weight * quantity <= self.max_payload:
-                self.inventory[product.product_id] = self.inventory.get(product.product_id, 0) + quantity
-                self.payload += product.weight * quantity
-                warehouse.stock[product.product_id] -= quantity
-                return True
-            else:
-                print("Drone overloaded")
-        return False
+    def load(self, warehouse, product, quantity):
+        if warehouse.stock.get(product.product_id, 0) < quantity:
+            return False
+        if self.payload + (product.weight * quantity) <= self.max_payload:
+            self.inventory[product.product_id] = self.inventory.get(product.product_id, 0) + quantity
+            self.payload += product.weight * quantity
+            warehouse.stock[product.product_id] -= quantity
+            return True
+        else:
+            print("Drone overloaded")
+            return False
+
+
     
     def deliver(self, order: Order, product: Product, quantity: int) -> bool:
         if product.product_id in self.inventory and self.inventory[product.product_id] >= quantity:
