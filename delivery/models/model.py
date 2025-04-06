@@ -166,3 +166,11 @@ class Simulation:
         Run the simulation
         """
         pass # Implement algorithms and call them here
+
+class Action:
+    def __init__(self, type, product_id, quantity, warehouse):
+        self.type = type
+        self.product_id = product_id
+        self.quantity = quantity
+        self.warehouse = warehouse
+    
