@@ -543,7 +543,7 @@ class GeneticAlgorithm:
                 f"Gen best = {gen_best}, Gen avg = {gen_avg:.2f}, "
                 f"Gen worst = {gen_min}, Global best so far = {best_fitness}")
             if progress_callback is not None:
-                progress_callback(gen, best_fitness)
+                progress_callback(gen, gen_best)
             for chromosome, fitness in zip(population, fitnesses):
                 if fitness > best_fitness:
                     best_fitness = fitness
