@@ -352,7 +352,7 @@ class SimulatedAnnealingOptimizer:
         return drones_actions
 
 
-    def run(self, initial_temperature, cooling_rate, min_temperature, max_iterations):
+    def run(self, initial_temperature, cooling_rate, min_temperature, max_iterations, progress_callback=None):
         current_orders = dict(sorted(self.orders.items(), key=lambda item: len(item[1].items)))
         drones_actions = self.simulate(copy.deepcopy(self.drones), copy.deepcopy(self.warehouses), current_orders)
         current_score = self.calculate_score(drones_actions, current_orders)
@@ -380,7 +380,9 @@ class SimulatedAnnealingOptimizer:
                 best_score = current_score
                 best_drones_actions = copy.deepcopy(drones_actions)
                 self.best_path = self.extract_best_path(best_drones_actions)
-                print(f"🌟 New Best Score: {best_score:.2f}")
+                if(progress_callback):
+                    progress_callback(iteration, best_score)
+                    print(f"🌟 New Best Score: {best_score:.2f}")
 
             temperature *= cooling_rate
             iteration += 1

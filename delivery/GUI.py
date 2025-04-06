@@ -364,7 +364,7 @@ class DroneDeliveryGUI:
     def run_simulation_threaded(self):
         """Run the simulation in a background thread"""
         try:
-            if self.algorithm == "ACO":
+            if self.algorithm_type == "ACO":
                 # Get algorithm parameters
                 num_ants = int(self.ants_entry.get())
                 num_iterations = int(self.iterations_entry.get())
@@ -539,5 +539,5 @@ if __name__ == "__main__":
         algo = "ACO"
 
     root = tk.Tk()
-    app = DroneDeliveryGUI(root, algorithm_type=algo)
+    app = DroneDeliveryGUI(root, algorithm=algo)
     root.mainloop()
