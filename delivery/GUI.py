@@ -364,7 +364,7 @@ class DroneDeliveryGUI:
     def run_simulation_threaded(self):
         """Run the simulation in a background thread"""
         try:
-            if self.algorithm_type == "ACO":
+            if self.algorithm == "ACO":
                 # Get algorithm parameters
                 num_ants = int(self.ants_entry.get())
                 num_iterations = int(self.iterations_entry.get())
@@ -426,7 +426,7 @@ class DroneDeliveryGUI:
                     return
                     
                 self.message_queue.put("COMPLETED")
-            elif self.algorithm_type == "GEN":
+            elif self.algorithm == "GEN":
                 pop_size = int(self.population_size_entry.get())
                 num_gens = int(self.generations_entry.get())
                 cross_rate = float(self.crossover_rate_entry.get())
