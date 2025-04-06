@@ -41,11 +41,11 @@ class AntColonyOpt:
         for iteration in range(self.num_iterations):
             solutions = []
             for ant in range(self.num_ants):
-                solution, cost, completed_turns = self.construct_solution()
-                solutions.append((solution, cost, completed_turns))
-                if cost < self.best_path_distance:
+                solution, score, completed_turns = self.construct_solution()
+                solutions.append((solution, score, completed_turns))
+                if score > self.best_path_distance:
                     self.best_path = solution
-                    self.best_path_distance = cost
+                    self.best_path_distance = score
                     self.completed_turns = completed_turns
             self.update_pheromone(solutions)
         self.score = self.best_path_distance
