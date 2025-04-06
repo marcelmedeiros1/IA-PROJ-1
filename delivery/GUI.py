@@ -539,5 +539,5 @@ if __name__ == "__main__":
         algo = "ACO"
 
     root = tk.Tk()
-    app = DroneDeliveryGUI(root, algorithm=algo)
+    app = DroneDeliveryGUI(root, algorithm_type=algo)
     root.mainloop()
