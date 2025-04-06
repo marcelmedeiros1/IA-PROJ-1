@@ -5,9 +5,10 @@ from queue import Queue
 from models.model import *
 from parsers.parsing import * 
 from algorithms.algorithm import *
+from algorithms.genetics1 import *
 
 class DroneDeliveryGUI:
-    def __init__(self, root):
+    def __init__(self, root, algorithm_type="ACO"):
         self.root = root
         self.root.title("Drone Delivery Simulation")
         self.root.geometry("1200x800")
@@ -15,7 +16,7 @@ class DroneDeliveryGUI:
         # Simulation data
         self.simulation = None
         self.simulation_data = None
-        self.algorithm = None
+        self.algorithm = algorithm_type
         self.running = False
         self.message_queue = Queue()
         
@@ -27,12 +28,20 @@ class DroneDeliveryGUI:
         self.visualization_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=5, pady=5)
         
         # Now create widgets
-        self.create_widgets()
+        if(self.algorithm == "ACO"):
+            self.create_widgets_aco()
+        elif(self.algorithm == "SA"):
+            self.create_widgets_sa()
+        elif(self.algorithm == "GEN"):
+            self.create_widgets_gen()
+        else:
+            messagebox.showerror("Error", "Invalid algorithm selected")
+            return
         
         # Start the message pump
         self.root.after(100, self.process_messages)
 
-    def create_widgets(self):
+    def create_widgets_aco(self):
         """Create all GUI widgets"""
         # Input file selection
         ttk.Label(self.control_frame, text="Input File:").grid(row=0, column=0, sticky=tk.W)
@@ -87,6 +96,112 @@ class DroneDeliveryGUI:
         self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
         self.status_var.set("Ready")
+
+    def create_widgets_sa(self):
+        """Create all GUI widgets for Simulated Annealing"""
+        # Input file selection
+        ttk.Label(self.control_frame, text="Input File:").grid(row=0, column=0, sticky=tk.W)
+        self.file_entry = ttk.Entry(self.control_frame, width=30)
+        self.file_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(self.control_frame, text="Browse", command=self.browse_file).grid(row=0, column=2, padx=5)
+        
+        ttk.Button(self.control_frame, text="Load Simulation", command=self.load_simulation).grid(row=1, column=0, columnspan=3, pady=10)
+        
+        # Simulated Annealing parameters
+        ttk.Label(self.control_frame, text="Simulated Annealing Parameters", font=('Arial', 10, 'bold')).grid(row=2, column=0, columnspan=3, pady=(10,5))
+        
+        # Lista de parâmetros para SA: (rótulo, valor padrão, nome do atributo)
+        sa_params = [
+            ("Initial Temperature:", "100.0", "initial_temp_entry"),
+            ("Cooling Rate:", "0.95", "cooling_rate_entry"),
+            ("Minimum Temperature:", "0.1", "min_temp_entry"),
+            ("Max Iterations:", "1000", "max_iterations_entry")
+        ]
+        
+        for i, (label, default, attr) in enumerate(sa_params, start=3):
+            ttk.Label(self.control_frame, text=label).grid(row=i, column=0, sticky=tk.W)
+            entry = ttk.Entry(self.control_frame, width=10)
+            entry.grid(row=i, column=1, padx=5, pady=2)
+            entry.insert(0, default)
+            setattr(self, attr, entry)
+        
+        # Control buttons
+        self.run_button = ttk.Button(self.control_frame, text="Run Simulation", command=self.run_simulation)
+        self.run_button.grid(row=7, column=0, columnspan=2, pady=10)
+        
+        self.stop_button = ttk.Button(self.control_frame, text="Stop Simulation", command=self.stop_simulation, state=tk.DISABLED)
+        self.stop_button.grid(row=7, column=2, pady=10)
+        
+        # Results display
+        self.results_text = tk.Text(self.control_frame, height=10, width=40)
+        self.results_text.grid(row=8, column=0, columnspan=3, pady=10)
+        
+        # Visualization canvas
+        self.canvas = tk.Canvas(self.visualization_frame, bg="white")
+        self.canvas.pack(expand=True, fill=tk.BOTH)
+        
+        # Scale control for zoom
+        self.scale_frame = ttk.Frame(self.visualization_frame)
+        self.scale_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(self.scale_frame, text="Zoom:").pack(side=tk.LEFT)
+        self.scale_slider = ttk.Scale(self.scale_frame, from_=1, to=20, value=10, command=self.update_visualization)
+        self.scale_slider.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        
+        # Status bar
+        self.status_var = tk.StringVar()
+        self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.status_var.set("Ready")
+
+    def create_widgets_gen(self):
+        """Create all GUI widgets for Genetic Algorithm"""
+        ttk.Label(self.control_frame, text="Input File:").grid(row=0, column=0, sticky=tk.W)
+        self.file_entry = ttk.Entry(self.control_frame, width=30)
+        self.file_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(self.control_frame, text="Browse", command=self.browse_file).grid(row=0, column=2, padx=5)
+        
+        ttk.Button(self.control_frame, text="Load Simulation", command=self.load_simulation).grid(row=1, column=0, columnspan=3, pady=10)
+        
+        ttk.Label(self.control_frame, text="Genetic Algorithm Parameters", font=('Arial', 10, 'bold')).grid(row=2, column=0, columnspan=3, pady=(10,5))
+        
+        ga_params = [
+            ("Population Size:", "2", "population_size_entry"),
+            ("Generations:", "50", "generations_entry"),
+            ("Crossover Rate:", "0.7", "crossover_rate_entry"),
+            ("Mutation Rate:", "0.1", "mutation_rate_entry"),
+        ]
+        
+        for i, (label, default, attr) in enumerate(ga_params, start=3):
+            ttk.Label(self.control_frame, text=label).grid(row=i, column=0, sticky=tk.W)
+            entry = ttk.Entry(self.control_frame, width=10)
+            entry.grid(row=i, column=1, padx=5, pady=2)
+            entry.insert(0, default)
+            setattr(self, attr, entry)
+        
+        self.run_button = ttk.Button(self.control_frame, text="Run Simulation", command=self.run_simulation)
+        self.run_button.grid(row=7, column=0, columnspan=2, pady=10)
+        
+        self.stop_button = ttk.Button(self.control_frame, text="Stop Simulation", command=self.stop_simulation, state=tk.DISABLED)
+        self.stop_button.grid(row=7, column=2, pady=10)
+        
+        self.results_text = tk.Text(self.control_frame, height=10, width=40)
+        self.results_text.grid(row=8, column=0, columnspan=3, pady=10)
+        
+        self.canvas = tk.Canvas(self.visualization_frame, bg="white")
+        self.canvas.pack(expand=True, fill=tk.BOTH)
+        
+        self.scale_frame = ttk.Frame(self.visualization_frame)
+        self.scale_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(self.scale_frame, text="Zoom:").pack(side=tk.LEFT)
+        self.scale_slider = ttk.Scale(self.scale_frame, from_=1, to=20, value=10, command=self.update_visualization)
+        self.scale_slider.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=5)
+        
+        self.status_var = tk.StringVar()
+        self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.status_var.set("Ready")
+
+
 
     def browse_file(self):
         from tkinter import filedialog
@@ -249,41 +364,113 @@ class DroneDeliveryGUI:
     def run_simulation_threaded(self):
         """Run the simulation in a background thread"""
         try:
-            # Get algorithm parameters
-            num_ants = int(self.ants_entry.get())
-            num_iterations = int(self.iterations_entry.get())
-            alpha = float(self.alpha_entry.get())
-            beta = float(self.beta_entry.get())
-            evaporation_rate = float(self.evaporation_entry.get())
-            
-            # Initialize algorithm
-            self.algorithm = AntColonyOpt(
-                grid=self.simulation.grid,
-                drones=self.simulation.drones,
-                warehouses=self.simulation.warehouses,
-                orders=self.simulation.orders,
-                products=self.simulation.products,
-                num_ants=num_ants,
-                num_turns=self.simulation.deadline,
-                num_iterations=num_iterations,
-                alpha=alpha,
-                beta=beta,
-                evaporation_rate=evaporation_rate
-            )
-            
-            # Run algorithm
-            self.message_queue.put("STATUS:Running simulation...")
-            best_path = self.algorithm.run()
-            
-            if not self.running:
-                self.message_queue.put("STATUS:Simulation stopped")
-                return
+            if self.algorithm == "ACO":
+                # Get algorithm parameters
+                num_ants = int(self.ants_entry.get())
+                num_iterations = int(self.iterations_entry.get())
+                alpha = float(self.alpha_entry.get())
+                beta = float(self.beta_entry.get())
+                evaporation_rate = float(self.evaporation_entry.get())
                 
-            self.message_queue.put("COMPLETED")
+                # Initialize algorithm
+                self.algorithm = AntColonyOpt(
+                    grid=self.simulation.grid,
+                    drones=self.simulation.drones,
+                    warehouses=self.simulation.warehouses,
+                    orders=self.simulation.orders,
+                    products=self.simulation.products,
+                    num_ants=num_ants,
+                    num_turns=self.simulation.deadline,
+                    num_iterations=num_iterations,
+                    alpha=alpha,
+                    beta=beta,
+                    evaporation_rate=evaporation_rate
+                )
+                
+                # Run algorithm
+                self.message_queue.put("STATUS:Running simulation...")
+                best_path = self.algorithm.run()
+                
+                if not self.running:
+                    self.message_queue.put("STATUS:Simulation stopped")
+                    return
+                    
+                self.message_queue.put("COMPLETED")
+            elif self.algorithm == "SA":
+                # Get algorithm parameters
+                initial_temp = float(self.initial_temp_entry.get())
+                cooling_rate = float(self.cooling_rate_entry.get())
+                min_temp = float(self.min_temp_entry.get())
+                max_iterations = int(self.max_iterations_entry.get())
+                
+                # Initialize algorithm
+                self.algorithm = SimulatedAnnealingOptimizer(
+                    self.simulation.drones,
+                    self.simulation.warehouses,
+                    self.simulation.orders,
+                    self.simulation.products,
+                    self.simulation.deadline
+                )
+                
+                # Run algorithm
+                self.message_queue.put("STATUS:Running simulation...")
+                best_path, best_score = self.algorithm.run(
+                    initial_temperature=initial_temp,
+                    cooling_rate=cooling_rate,
+                    min_temperature=min_temp,
+                    max_iterations=max_iterations
+                )
+                
+                if not self.running:
+                    self.message_queue.put("STATUS:Simulation stopped")
+                    return
+                    
+                self.message_queue.put("COMPLETED")
+            elif self.algorithm_type == "GEN":
+                pop_size = int(self.population_size_entry.get())
+                num_gens = int(self.generations_entry.get())
+                cross_rate = float(self.crossover_rate_entry.get())
+                mut_rate  = float(self.mutation_rate_entry.get())
+                
+                self.algorithm = GeneticAlgorithm(
+                    simulation=self.simulation,
+                    population_size=pop_size,
+                    num_generations=num_gens,
+                    crossover_rate=cross_rate,
+                    mutation_rate=mut_rate
+                )
+                
+                self.message_queue.put("STATUS:Running Genetic Algorithm...")
+                
+                # We'll modify the GA run method to accept a "progress_callback" 
+                # that is called after each generation with (gen, best_fit).
+                best_chrom, best_fit = self.algorithm.run(progress_callback=self.genetic_progress_update)
+                
+                if not self.running:
+                    self.message_queue.put("STATUS:Simulation stopped")
+                    return
+                self.message_queue.put("COMPLETED")
             
         except Exception as e:
             self.message_queue.put(f"ERROR:{str(e)}")
             self.running = False
+    def sa_progress_update(self, iteration, current_best):
+        """
+        Example callback for SA so we can show partial updates.
+        Called by the SA code each iteration or every N iterations.
+        """
+        # Post partial update
+        if self.running:
+            self.message_queue.put(f"UPDATE_GEN:{iteration}:{current_best}")  # reuse the "UPDATE_GEN" format
+
+    def genetic_progress_update(self, gen, best_fitness):
+        """
+        Called by the GA code after each generation, or every few generations.
+        """
+        if self.running:
+            self.message_queue.put(f"UPDATE_GEN:{gen}:{best_fitness}")
+
+
 
     def on_simulation_complete(self):
         """Handle simulation completion"""
@@ -340,6 +527,17 @@ class DroneDeliveryGUI:
         Thread(target=self.run_simulation_threaded, daemon=True).start()
 
 if __name__ == "__main__":
+    print("Choose an algorithm to use:")
+    print("  - ACO (Ant Colony Optimization)")
+    print("  - SA  (Simulated Annealing)")
+    print("  - GEN (Genetic Algorithm)")
+    
+    algo = input("Enter algorithm (ACO/SA/GEN): ").strip().upper()
+
+    if algo not in ["ACO", "SA", "GEN"]:
+        print("❌ Invalid choice. Defaulting to ACO.")
+        algo = "ACO"
+
     root = tk.Tk()
-    app = DroneDeliveryGUI(root)
+    app = DroneDeliveryGUI(root, algorithm_type=algo)
     root.mainloop()

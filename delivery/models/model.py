@@ -4,8 +4,15 @@ class Location:
     def __init__(self, x: int, y: int): 
         self.x = x # Position in X-axis
         self.y = y # Position in Y-axis
-    def euclidean_distance(self, other: "Location") -> float:
-        return math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
+    def euclidean_distance(self, other: "Location") -> int:
+        distance = math.sqrt((self.x - other.x) ** 2 + (self.y - other.y) ** 2)
+        return math.ceil(distance)
+    def __eq__(self, other):
+        if isinstance(other, Location):
+            return self.x == other.x and self.y == other.y
+        return NotImplemented
+    def __ne__(self, other):
+        return not self == other
 class Grid: 
     def __init__(self, rows: int, cols: int): 
         self.rows = rows # Number of            rows in the grid 
@@ -39,22 +46,28 @@ class Drone:
         self.max_payload = max_payload
         self.payload = 0
         self.inventory = {} # Dictionary {product_id: quantity}
-        self.busy = False
+        self.busy_until = 0
+        self.current_task = None
+        self.queue = []
 
     def move_to(self, location: Location) -> int:
         distance = self.location.euclidean_distance(location)
         self.location = location
         return distance
     
-    def load(self, warehouse: Warehouse ,product: Product, quantity: int) -> bool:
-        if product.product_id in warehouse.stock and warehouse.stock[product.product_id] >= quantity:
-            totalWeight = sum(self.inventory.get(product.product_id, 0) * product.weight for product_id in self.inventory)
-            if totalWeight + product.weight * quantity <= self.max_payload:
-                self.inventory[product.product_id] = self.inventory.get(product.product_id, 0) + quantity
-                self.payload += product.weight * quantity
-                warehouse.stock[product.product_id] -= quantity
-                return True
-        return False
+    def load(self, warehouse, product, quantity):
+        if warehouse.stock.get(product.product_id, 0) < quantity:
+            return False
+        if self.payload + (product.weight * quantity) <= self.max_payload:
+            self.inventory[product.product_id] = self.inventory.get(product.product_id, 0) + quantity
+            self.payload += product.weight * quantity
+            warehouse.stock[product.product_id] -= quantity
+            return True
+        else:
+            print("Drone overloaded")
+            return False
+
+
     
     def deliver(self, order: Order, product: Product, quantity: int) -> bool:
         if product.product_id in self.inventory and self.inventory[product.product_id] >= quantity:
@@ -98,12 +111,6 @@ class Simulation:
         self.time = 0
         self.deadline = simulation_data["simulation"]["deadline"]
 
-    def run(self):
-        """
-        Run the simulation
-        """
-        pass # Implement algorithms and call them here
-
     def testing_parse(self):
         # Printing simulation grid
         print(f"Grid: {self.grid.rows} rows x {self.grid.cols} columns")
@@ -136,4 +143,34 @@ class Simulation:
             print(f"    Products Ordered:")
             for product_id, quantity in order.items.items():
                 print(f"      Product {product_id}: {quantity} items")
-        
+    
+    def list_orders(self):
+        orders_set = []
+        for orders in self.orders:
+            orders_set.append(orders.order_id)
+        return orders_set
+    def list_warehouses(self):
+        warehouses_set = []
+        for warehouse in self.warehouses:
+            warehouses_set.append(warehouse.warehouse_id)
+        return warehouses_set
+    
+    def list_drones(self):
+        drones_set = []
+        for drone in self.drones:
+            drones_set.append(drone.drone_id)
+        return drones_set
+
+    def run(self):
+        """
+        Run the simulation
+        """
+        pass # Implement algorithms and call them here
+
+class Action:
+    def __init__(self, type, product_id, quantity, warehouse):
+        self.type = type
+        self.product_id = product_id
+        self.quantity = quantity
+        self.warehouse = warehouse
+    
