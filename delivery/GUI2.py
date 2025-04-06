@@ -207,7 +207,6 @@ class GeneticGUI:
                 def progress(gen, best_score):
                     if self.running:
                         self.message_queue.put(f"ITER_UPDATE:{gen}:{best_score}")
-                # Modify your run() to accept progress_callback=..., e.g.:
                 best_chrom, best_score = self.algorithm.run(self.simulation, progress_callback=progress)
 
                 if self.running:
@@ -264,7 +263,6 @@ class GeneticGUI:
                 def progress(gen, best_score):
                     if self.running:
                         self.message_queue.put(f"ITER_UPDATE:{gen}:{best_score}")
-                # Modify your run() to accept progress_callback=..., e.g.:
                 best_path, best_score = self.algorithm.run(
                     initial_temperature=initial_temp,
                     cooling_rate=cooling_rate,

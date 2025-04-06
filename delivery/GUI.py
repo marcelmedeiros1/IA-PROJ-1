@@ -27,7 +27,6 @@ class DroneDeliveryGUI:
         self.visualization_frame = ttk.LabelFrame(self.root, text="Visualization", padding=10)
         self.visualization_frame.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=5, pady=5)
         
-        # Now create widgets
         if(self.algorithm == "ACO"):
             self.create_widgets_aco()
         elif(self.algorithm == "SA"):
