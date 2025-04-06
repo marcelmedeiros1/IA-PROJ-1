@@ -27,7 +27,7 @@ class AntColonyOpt:
         self.score = 0
         self.in_turns = 0
         self.completed_turns = 0
-        self.best_path_distance = math.inf
+        self.best_path_distance = 0
     
     def construct_score(self):
         score = ((self.num_turns - self.in_turns) / self.num_turns) * 100
@@ -42,7 +42,7 @@ class AntColonyOpt:
         heuristic_value = self.heuristic(warehouse, order) ** self.beta
         return pheromone_value * heuristic_value
 
-    def run(self):
+    def run(self, progress_callback=None):
         for iteration in range(self.num_iterations):
             solutions = []
             for ant in range(self.num_ants):
@@ -52,9 +52,12 @@ class AntColonyOpt:
                     self.best_path = solution
                     self.best_path_distance = score
                     self.completed_turns = completed_turns
+                    if progress_callback:
+                        progress_callback(iteration, score)
+                        print(f"🌟 New Best Score: {score:.2f}")
             self.update_pheromone(solutions)
         self.score = self.best_path_distance
-        return self.best_path
+        return self.best_path, self.score
 
     def construct_solution(self):
         solution = []

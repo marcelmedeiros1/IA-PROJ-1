@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 from tkinter import filedialog
 from threading import Thread
 from queue import Queue
+import traceback
 import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib.figure import Figure
@@ -237,8 +238,7 @@ class GeneticGUI:
                 def progress(gen, best_score):
                     if self.running:
                         self.message_queue.put(f"ITER_UPDATE:{gen}:{best_score}")
-                # Modify your run() to accept progress_callback=..., e.g.:
-                best_chrom, best_score = self.algorithm.run(self.simulation, progress_callback=progress)
+                best_path,best_score = self.algorithm.run( progress_callback=progress)
 
                 if self.running:
                     self.message_queue.put(f"DONE:{best_score}")
@@ -278,6 +278,7 @@ class GeneticGUI:
 
         except Exception as e:
             self.message_queue.put(f"ERROR:{str(e)}")
+            traceback.print_exc() 
 
     def stop_simulation(self):
         if self.running:
@@ -301,7 +302,11 @@ class GeneticGUI:
             elif msg.startswith("DONE:"):
                 # GA done
                 parts = msg.split(":")
-                final_score = float(parts[1]) if len(parts) > 1 else 0.0
+                try:
+                    final_score = float(parts[1]) if len(parts) > 1 and parts[1] != '[]' else 0.0
+                except ValueError:
+                    print(f"Invalid score value: {parts}")
+                    final_score = 0.0  # Or another default value, depending on your use case
                 self.results_text.insert(tk.END, "Algorithm Completed!\n")
                 self.results_text.insert(tk.END, f"Final Score: {final_score}\n")
                 self.results_text.see(tk.END)

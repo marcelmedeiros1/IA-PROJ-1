@@ -20,21 +20,21 @@ def main():
     # aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10)
     # solution = aco.run()
     # aco.print_solution()
-    # simulation_data = parse_file("redundancy.in")
-    # simulation = Simulation(simulation_data)
+    #simulation_data = parse_file("tiny.in")
+    #simulation = Simulation(simulation_data)
     #simulation.testing_parse()
 
     # # Testing Algorithm
-    # aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10, simulation.deadline)
-    # solution = aco.run()
-    # aco.print_solution()
+    #aco = AntColonyOpt(simulation.grid, simulation.drones, simulation.warehouses, simulation.orders, simulation.products, 10, simulation.deadline)
+    #solution, score = aco.run()
+    #aco.print_solution()
 
-    ga = GeneticAlgorithm(sim, population_size=2, num_generations=50,crossover_rate=0.7 ,mutation_rate=0.3)
+    #ga = GeneticAlgorithm(sim, population_size=2, num_generations=50,crossover_rate=0.7 ,mutation_rate=0.3)
 
-    best_chrom, best_score = ga.run(sim)
-    print("\n=== GA run complete ===")
-    print("Best Score:", best_score)
-    ga.print_solution()
+    #best_chrom, best_score = ga.run(sim)
+    #print("\n=== GA run complete ===")
+    #print("Best Score:", best_score)
+    #ga.print_solution()
 
 if __name__ == "__main__":
     main()
